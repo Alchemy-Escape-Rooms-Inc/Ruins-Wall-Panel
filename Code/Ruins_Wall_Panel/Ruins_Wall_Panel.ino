@@ -28,12 +28,4 @@ void turnOffLED(){
 void drivePWM(){
   analogWrite(PWM_PIN,brightness);  
 }
-void loop() {
-  if(!digitalRead(MATRIX_INPUT)){
-    Serial.println("Matrix conductor connected");
-    turnOnLED();
-    drivePWM();
-  } else {
-    turnOffLED();  
-  }
-}
+void loop() {}
