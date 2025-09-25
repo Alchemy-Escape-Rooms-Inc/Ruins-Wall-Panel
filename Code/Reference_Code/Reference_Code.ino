@@ -69,7 +69,7 @@ void loop() {
         leds[row][i] = (sensorValue == HIGH) ? CRGB(0, 0, brightness[row][col]) : CRGB::Black;
       }
     }
-    FastLED.show(leds[row], LEDS_PER_STRIP);
+    FastLED.show(leds[row]);
   }
 
   if (currentTime - lastUpdate >= pulseInterval) {
