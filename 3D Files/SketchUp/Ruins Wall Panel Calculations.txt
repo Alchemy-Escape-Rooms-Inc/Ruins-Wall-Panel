@@ -1,0 +1,16 @@
+4'x8' Plywood: 48"*96" = 4608"^2
+6"x8" Letter boards: 6"*8" = 48"^2    48*35(letter boards) = 1680"^2 
+Total spacing left: 4608 - 1680 = 2928"^2 (verifying enough material left)
+---------------------------------------------------------------------------
+Number of columns: 7 
+Number of rows: 5
+---------------------------------------------------------------------------
+Letter boards occupying space (column): 7 * 6" = 42" 
+Letter boards occupying space (row): 5 * 8" = 40"
+---------------------------------------------------------------------------
+Spacing in between letter boards (columns): 8'-> 96", 96"- 42" = 54"
+		For 7 columns, you need 8 sides: 54"/8= 6 3/4"
+
+Spacing in between letter boards (rows): 4'-> 48", 48"- 40" = 8"
+		For 5 rows, you need 6 sides:8"/6 ~= 1 1/3"
+---------------------------------------------------------------------------
