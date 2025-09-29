@@ -29,7 +29,7 @@ void setup() {
     for (int col = 0; col < SENSORS_PER_ROW; col++) {
       pinMode(touchPins[row][col], INPUT);
     }
-    FastLED.addLeds<WS2812B, GRB>(leds[row], LEDS_PER_STRIP).setCorrection(TypicalLEDStrip);
+    FastLED.addLeds<WS2812B,GRB>(leds[row], LEDS_PER_STRIP).setCorrection(TypicalLEDStrip);
     FastLED.clear(true);
   }
 }
