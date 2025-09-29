@@ -3,8 +3,8 @@
 
 #define NUM_ROWS 3
 #define NUM_COLS 7
-#define LEDS_PER_ROW 20
-#define LEDS_PER_COL 1
+#define LEDS_PER_ROW 36
+#define LEDS_PER_COL 5
 #define TOTAL_LEDS (LEDS_PER_ROW * NUM_ROWS)
 #define NUM_SECRET_LETTERS 7
 #define LED_TYPE WS2812B
@@ -12,14 +12,14 @@
 //------------GLOBAL VARIABLES------------------
 //Immutables variables
 const uint8_t brightness = 128;                                                                //half the full brightness
-const uint8_t ledsDataPin = 13;                                                                //leds data pin
+const uint8_t ledsDataPin = 13;                                                                 //leds data pin
 const uint8_t secretLettersPositions[NUM_SECRET_LETTERS] = { 0, 4, 9, 11, 14, 15, 21 };        //Values corresponding to the location of the secret letters
 const uint8_t correctSecretLettersSequence[NUM_SECRET_LETTERS] = { 11, 9, 0, 4, 15, 14, 21 };  //boolean array for tracking the proper selection sequence
 const uint8_t xWeight = LEDS_PER_ROW / NUM_COLS;                                               //number of LEDs in a group to illuminate in a row (x)
 const uint8_t yWeight = LEDS_PER_COL;                                                          //number of LEDs in a group to illuminate in column(s) (y)
 const uint8_t rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
-const uint8_t rowPins[NUM_ROWS] = { 2, 3, 4 };                                                 //pins capturing/producing the row's level
-const uint8_t colPins[NUM_COLS] = { 5, 6, 7, 8, 9, 10, 11};                                    //pins capturing/producing the columsn's level
+const uint8_t rowPins[NUM_ROWS] = { 3, 4, 5 };                                                 //pins capturing/producing the row's level
+const uint8_t colPins[NUM_COLS] = {6,7,8,9,10,11,12};                                           //pins capturing/producing the columsn's level
 //Mutables variables
 uint8_t rgb[3] = { 255, 255, 255 };                                                            //Default RGB value for all LEDs. White.
 uint8_t sequenceOfInputs[NUM_SECRET_LETTERS];                                                  //Array holding the order of the pressed inputs
@@ -56,6 +56,7 @@ uint8_t inputToLEDMapping(uint8_t inputPosition);
 
 //------------------MAIN SETUP-------------------
 void setup() {
+  Serial.begin(9600);
   _init();
 }
 //------------------MAIN LOOP--------------------
@@ -94,6 +95,10 @@ void run() {
   int8_t pressedButtonPosition = scanForButtonPress();
   if (pressedButtonPosition < 0)
     return;
+
+  Serial.print("Button pressed: ");
+  Serial.println((int)pressedButtonPosition);
+  
   turnOnLEDs(inputToLEDMapping(pressedButtonPosition));
   if (isValidInput(pressedButtonPosition))
     storeInput(pressedButtonPosition);
