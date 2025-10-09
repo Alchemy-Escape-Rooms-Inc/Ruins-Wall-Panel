@@ -122,9 +122,10 @@ void run() {
     storeInput(pressedButtonPosition);
 
 
-  if (count < 7)
+  if (count < 7){
     delay(1000);   //delay for a second
     return;
+  }
   if (!isAMatchingSequence()) {
     //you lose
     losingResponse();
@@ -132,8 +133,7 @@ void run() {
     winningResponse();  //reset count to start grabbing new entries
   }
 
-  //may want to add indicator to show invalid sequence
-  //such as the pressed corresponding LEDs are blinking red
+  resetAllParameters();
 }
 void setRGB(int red, int green, int blue) {
   rgb[0] = red;
@@ -234,11 +234,13 @@ void storeInput(int pos) {
 }
 
 void winningResponse() {
+  Serial.println("You won.");
   setRGB(0, 255, 0);
   for (int i = 0; i < 5; i++) { blinkAllLEDs(); }
 }
 
 void losingResponse() {
+  Serial.println("You lose!");
   setRGB(255, 0, 0);
   for (int i = 0; i < 5; i++) { blinkAllLEDs(); }
 }
@@ -284,7 +286,7 @@ bool isAlreadyStored(int pos) {
   for (int i = 0; i < count; i++) {
     if (pos == sequenceOfInputs[i]) {
       Serial.print(pos);
-      Serial.println("was already stored.");
+      Serial.println(" was already stored.");
       return true;
     }
   }
