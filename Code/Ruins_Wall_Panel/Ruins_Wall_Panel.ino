@@ -1,13 +1,14 @@
 //MACROS
 #include <FastLED.h>
 
-#define NUM_ROWS 3
+#define NUM_ROWS 5
 #define NUM_COLS 7
 #define INPUT_MATRIX (NUM_ROWS * NUM_COLS)
-#define LEDS_PER_ROW 35
+#define LEDS_PER_ROW 91
 #define LEDS_PER_COL LEDS_PER_ROW / NUM_COLS
-#define TOTAL_LEDS (LEDS_PER_ROW * NUM_ROWS)
+#define TOTAL_LEDS (LEDS_PER_ROW * NUM_ROWS * 2)
 #define NUM_SECRET_LETTERS 7
+#define LEDS_DATA_PIN A0
 #define LED_TYPE WS2812B
 
 
@@ -168,13 +169,12 @@ struct sQueue {
 //------------GLOBAL VARIABLES------------------
 //Immutables variables
 const int brightness = 128;                                                                //half the full brightness
-const int ledsDataPin = 2;                                                                 //leds data pin
 const int correctSecretLettersSequence[NUM_SECRET_LETTERS] = { 11, 9, 0, 4, 15, 14, 20 };  //boolean array for tracking the proper selection sequence
-const int xWeight = LEDS_PER_COL;                                                          //number of LEDs in a group to illuminate in a row (x)
-const int yWeight = 1;                                                                     //number of LEDs in a group to illuminate in column(s) (y)
+const int xWeight = LEDS_PER_COL;                                                         //number of LEDs in a group to illuminate in a row (x)
+const int yWeight = 2;                                                                     //number of LEDs in a group to illuminate in column(s) (y)
 const int rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
-const int rowPins[NUM_ROWS] = { 3, 4, 5 };                                                 //pins capturing/producing the row's level
-const int colPins[NUM_COLS] = { 6, 7, 8, 9, 10, 11, 12 };                                  //pins capturing/producing the columsn's level
+const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                                       //pins capturing/producing the row's level
+const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
 const int fadeFactor = 30;
 
 //Mutables variables
@@ -224,6 +224,7 @@ bool haveWon();
 
 int scanForButtonPress();
 int inputToLEDMapping(int inputPosition);
+int inputToXY(int inputPosition);
 
 //------------------MAIN SETUP-------------------
 void setup() {
@@ -249,7 +250,7 @@ void param_init() {
 
 void gpio_init() {
   //Setting the LEDs control pin to output
-  pinMode(ledsDataPin, OUTPUT);
+  pinMode(LEDS_DATA_PIN, OUTPUT);
   //Setting the rows contacts as read/inputs
   for (int i = 0; i < NUM_ROWS; i++)
     pinMode(rowPins[i], INPUT);
@@ -266,7 +267,7 @@ void gpio_init() {
     digitalWrite(colPins[i], LOW);
 }
 void led_init() {
-  FastLED.addLeds<LED_TYPE, ledsDataPin, GRB>(leds, TOTAL_LEDS);
+  FastLED.addLeds<LED_TYPE, LEDS_DATA_PIN, GRB>(leds, TOTAL_LEDS);
   FastLED.setBrightness(128);
   turnOffAllLEDs();
   setRGB(255, 255, 255);
@@ -453,5 +454,17 @@ int scanForButtonPress() {
   return -1;
 }
 int inputToLEDMapping(int inputPosition) {
-  return inputPosition * xWeight;
+  //x = row y = col
+  int x=0, y=0;
+  for(int i = 0; i < NUM_ROWS; i++)
+    if((i+1)* NUM_COLS > inputPosition){
+      x = i;
+      break;
+    }
+  y = inputPosition - (x * NUM_COLS); 
+  Serial.print("Row: ");
+  Serial.print(x);
+  Serial.print(" Col: ");
+  Serial.println(y);
+  return (y + (x * yWeight * NUM_COLS)) * xWeight;  
 }
