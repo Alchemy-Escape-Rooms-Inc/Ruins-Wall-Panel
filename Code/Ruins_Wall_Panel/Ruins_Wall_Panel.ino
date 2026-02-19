@@ -169,7 +169,7 @@ struct sQueue {
 //------------GLOBAL VARIABLES------------------
 //Immutables variables
 const int brightness = 128;                                                                //half the full brightness
-const int correctSecretLettersSequence[NUM_SECRET_LETTERS] = { 11, 9, 0, 4, 15, 14, 20 };  //boolean array for tracking the proper selection sequence
+const int correctSecretLettersSequence[NUM_SECRET_LETTERS] = { 8, 22, 10, 26, 4, 13, 31};  //boolean array for tracking the proper selection sequence
 const int xWeight = LEDS_PER_COL;                                                         //number of LEDs in a group to illuminate in a row (x)
 const int yWeight = 2;                                                                     //number of LEDs in a group to illuminate in column(s) (y)
 const int rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
@@ -303,7 +303,7 @@ void turnOnLEDs(int ledPosition) {
 void updateLEDs(int position, void (*func)(int)) {
   Serial.print("Updating LEDs: ");
   for (int y = 0; y < yWeight; y++)
-    for (int x = 0; x < xWeight; x++)
+    for (int x = 3; x < xWeight-2; x++)               //added filter: start on 3, end on 11
       func((position + (y * LEDS_PER_ROW)) + x);
   FastLED.show();
   Serial.println("");
@@ -453,18 +453,21 @@ int scanForButtonPress() {
   //nothing is pressed
   return -1;
 }
+
 int inputToLEDMapping(int inputPosition) {
   //x = row y = col
   int x=0, y=0;
-  for(int i = 0; i < NUM_ROWS; i++)
+  for(int i = 0; i < NUM_ROWS; i++){
     if((i+1)* NUM_COLS > inputPosition){
       x = i;
       break;
     }
+  }
   y = inputPosition - (x * NUM_COLS); 
   Serial.print("Row: ");
   Serial.print(x);
   Serial.print(" Col: ");
   Serial.println(y);
   return (y + (x * yWeight * NUM_COLS)) * xWeight;  
+
 }
