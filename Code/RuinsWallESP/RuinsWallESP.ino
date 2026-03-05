@@ -20,7 +20,7 @@ const char * topic = "MermaidsTale/RuinsWallESP";
 void setup_wifi() {
   delay(1000);
   Serial.println("*********** WIFI ***********");
-  Serial.print("\n Connecting to ");
+  Serial.print("Connecting to SSID: ");
   Serial.print(ssid);
 
   WiFi.begin(ssid,password);
@@ -35,7 +35,7 @@ void setup_wifi() {
 //MQTT SERVER
 void reconnect() {
   while (!mqtt.connected()) {
-    Serial.print("******** MQTT SERVER ********");
+    Serial.println("******** MQTT SERVER ********");
     if (mqtt.connect("ESP32 WROOM")) {
       Serial.print("Connection to broker established: ");
       Serial.println(mqttServer);
@@ -76,6 +76,8 @@ void program(){
 void _init(){
   //io setup
   setup_io();
+  //network setup
+  setup_wifi();
   //mqtt setup
   setup_server();
 }
