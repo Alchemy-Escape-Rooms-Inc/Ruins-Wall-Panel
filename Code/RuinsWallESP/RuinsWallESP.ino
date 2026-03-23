@@ -126,6 +126,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
   if (strcmp(msg, "SOLVE") == 0) {
         puzzleSolved = true;
+        sendMegaCommand("SOLVE");
         mqttClient.publish(MQTT_TOPIC_COMMAND, "SOLVED");
         return;
   }
@@ -161,6 +162,9 @@ void receiveMegaCommand(String cmd){
   } else if (cmd == "SOLVED"){
     puzzleSolved = true;
     mqttClient.publish(MQTT_TOPIC_COMMAND, "PUZZLE_SOLVED");
+  } else if(cmd == "MANUALLY_SOLVED"){
+    puzzleSolved = true;
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "MANUALLY_SOLVED");
   }
 }
 

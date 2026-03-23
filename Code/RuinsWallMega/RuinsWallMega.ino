@@ -215,7 +215,7 @@ void storeInput(int pos);
 
 void winningResponse();
 void losingResponse();
-void handleESPCommand();
+void handleCommand(String cmd);
 
 
 void resetInputStorage();
@@ -279,6 +279,16 @@ void led_init() {
 }
 void run() {
   
+  while(Serial1.available()){
+    char c = Serial1.read();
+    if(c == '\n') {
+      incoming.trim();
+      handleCommand(incoming);
+      incoming = "";
+    } else {
+      incoming += c;
+    }
+  }
   fadeLEDs();
   
   posQueue.printQueue();
@@ -293,16 +303,6 @@ void run() {
     resetAll();
   }
 
-  while(Serial1.available()){
-    char c = Serial1.read();
-    if(c == '\n') {
-      incoming.trim();
-      handleCommand(incoming);
-      incoming = "";
-    } else {
-      incoming += c;
-    }
-  }
 
   delay(150);
 }
@@ -430,7 +430,11 @@ void handleCommand(String cmd){
   } else if (cmd == "PUZZLE_RESET") {
     resetAll();
     sendCommand("RESET");
+  }else if (cmd == "SOLVE") {
+    puzzleSolved = true;
+    sendCommand("MANUALLY_SOLVED");
   }
+
 }
 
 void resetInputStorage() {
