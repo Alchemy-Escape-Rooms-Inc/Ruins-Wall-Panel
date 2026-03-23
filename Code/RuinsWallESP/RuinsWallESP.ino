@@ -1,29 +1,42 @@
 
-#include <WiFi.h>
+#include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
-#define WIN_DETECTED_PIN 2
+#define VERSION "1.0.0"
+
+#define GAME_NAME "MermaidsTale"
+#define PROP_NAME "RuinsWall"
+
+#define MQTT_TOPIC_COMMAND  "MermaidsTale/RuinsWall/command"
+#define MQTT_TOPIC_STATUS   "MermaidsTale/RuinsWall/status"
+#define MQTT_TOPIC_LOG      "MermaidsTale/RuinsWall/log"
 //************ GLOBAL VARIABLES **********
 WiFiClient espClient;
-PubSubClient mqtt(espClient);
+PubSubClient mqttClient(espClient);
 
 
-const char * ssid = "AlchemyGuest";
-const char * password = "VoodooVacation5601";
-const char * mqttServer = "10.1.10.115";
-const char * topic = "MermaidsTale/RuinsWallESP"; 
+// WiFi credentials
+const char* WIFI_SSID = "AlchemyGuest";
+const char* WIFI_PASS = "VoodooVacation5601";
 
+// MQTT broker
+const char* MQTT_SERVER = "10.1.10.115";
+const int MQTT_PORT = 1883;
+
+bool puzzleSolved = false;
+
+String incoming = "";
 
 
 // *************** FUNCTIONS  *******************
 //WIFI NETWORK
-void setup_wifi() {
+void setupWiFi() {
   delay(1000);
   Serial.println("*********** WIFI ***********");
   Serial.print("Connecting to SSID: ");
-  Serial.print(ssid);
+  Serial.println(WIFI_SSID);
 
-  WiFi.begin(ssid,password);
+  WiFi.begin(WIFI_SSID,WIFI_PASS);
 
   while(WiFi.status() != WL_CONNECTED){
     delay(100);
@@ -33,53 +46,156 @@ void setup_wifi() {
 }
 
 //MQTT SERVER
-void reconnect() {
-  while (!mqtt.connected()) {
-    Serial.println("******** MQTT SERVER ********");
-    if (mqtt.connect("ESP32 WROOM")) {
-      Serial.print("Connection to broker established: ");
-      Serial.println(mqttServer);
+void connectMQTT() {
+    while (!mqttClient.connected()) {
+        Serial.print("Connecting to MQTT...");
 
-      mqtt.publish(topic, "Connected!");        //Message sent to broker, identifying the connected shell.
-      mqtt.subscribe(topic);                             //shell subscribing to the broker's topic
+        String clientId = PROP_NAME;
+        clientId += "_";
+        clientId += String(random(0xffff), HEX);
 
+        if (mqttClient.connect(clientId.c_str())) {
+            Serial.println("connected!");
+
+            // Subscribe to command topic
+            mqttClient.subscribe(MQTT_TOPIC_COMMAND);
+
+            // Announce we're online
+            mqttClient.publish(MQTT_TOPIC_STATUS, "ONLINE");
+            mqttLogf("%s v%s online", PROP_NAME, VERSION);
+
+        } else {
+            Serial.printf("failed (rc=%d), retrying in 5s\n", mqttClient.state());
+            delay(5000);
+        }
+    }
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  char topicBuf[128];
+  strncpy(topicBuf,topic,sizeof(topicBuf)-1);
+  topicBuf[sizeof(topicBuf)-1] = '\0';
+
+  char message[128];
+  if(length >= sizeof(message)){
+    length = sizeof(message) - 1;
+  }
+
+  memcpy(message,payload,length);
+  message[length] = '\0';
+
+  char * msg = message;
+  while(*msg == ' ' || *msg == '\r' || *msg == '\n')
+    msg++;
+  char * end = msg + strlen(msg) -1;
+  while(end > msg && (*end == ' ' || *end == 't' || *end == '\r' || *end == '\n')){
+    *end = '\0';
+    end--;
+  }
+
+  Serial.printf("[MQTT] Received on %s: %s\n", topicBuf,msg);
+
+  if(strcmp(topicBuf,MQTT_TOPIC_COMMAND) != 0){
+    return;
+  }
+
+  if(strcmp(msg,"PING") == 0){
+    mqttClient.publish(MQTT_TOPIC_COMMAND,"PONG");
+    Serial.println("[MQTT] PING -> PONG");
+    return;
+  }
+  if(strcmp(msg,"STATUS") == 0){
+    const char* state = puzzleSolved ? "SOLVED" : "READY";
+    mqttClient.publish(MQTT_TOPIC_COMMAND,state);
+    Serial.printf("[MQTT] STATUS -> %s\n",state);
+    return;
+  }
+  if(strcmp(msg,"RESET") == 0){
+    mqttClient.publish(MQTT_TOPIC_COMMAND,"OK");
+    Serial.println("[MQTT] RESET -> Rebooting...");
+    delay(100);
+    ESP.restart();
+    return;
+  }
+  if (strcmp(msg, "PUZZLE_RESET") == 0) {
+    puzzleSolved = false;
+    // Add your puzzle reset logic here
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "OK");
+    Serial.println("[MQTT] PUZZLE_RESET -> OK");
+    return;
+  }
+  if (strcmp(msg, "SOLVE") == 0) {
+        puzzleSolved = true;
+        sendMegaCommand("SOLVE");
+        mqttClient.publish(MQTT_TOPIC_COMMAND, "SOLVED");
+        return;
+  }
+   Serial.printf("[MQTT] Unknown command: %s\n", msg);
+}
+
+void setupMQTT() {
+    mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+    mqttClient.setCallback(mqttCallback);
+    mqttClient.setBufferSize(512);  // Increase if needed
+}
+
+//GENERAL FUNCTIONS
+void mqttLogf(const char* format, ...) {
+    char buffer[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    mqttClient.publish(MQTT_TOPIC_LOG, buffer);
+    Serial.println(buffer);
+}
+
+void receiveMegaCommand(String cmd){
+  if(cmd == "PONG"){
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "MEGA_PONG");
+  } else if (cmd == "READY") {
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "READY_OK");
+  } else if (cmd == "RESET"){
+    puzzleSolved = false;
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "PUZZLE_HAS_RESET");
+  } else if (cmd == "SOLVED"){
+    puzzleSolved = true;
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "PUZZLE_SOLVED");
+  } else if(cmd == "MANUALLY_SOLVED"){
+    puzzleSolved = true;
+    mqttClient.publish(MQTT_TOPIC_COMMAND, "MANUALLY_SOLVED");
+  }
+}
+
+void sendMegaCommand(String cmd){
+  Serial.println(cmd);
+}
+
+void program(){
+  if (!mqttClient.connected()) {
+    connectMQTT();
+  }
+  mqttClient.loop();
+  
+  while(Serial.available()){
+    char c = Serial.read();
+
+    if(c == '\n') {
+      incoming.trim();
+      receiveMegaCommand(incoming);
+      incoming = "";
     } else {
-      Serial.print("failed, rc=");
-      Serial.print(mqtt.state());
-      Serial.println(". Trying again in 5 seconds.");
-      delay(5000);
+      incoming += c;
     }
   }
 }
 
-void setup_server(){
-  mqtt.setServer(mqttServer, 1883);
-}
-
-//GENERAL FUNCTIONS
-void setup_io(){
-  pinMode(WIN_DETECTED_PIN,INPUT_PULLUP);
-}
-void winner(){
-    mqtt.publish(topic,"RuinsWallSolved");
-}
-void program(){
-  if (!mqtt.connected()) {
-    reconnect();
-  }
-  mqtt.loop();
-
-  if(digitalRead(WIN_DETECTED_PIN))
-    winner();
-}
-
 void _init(){
-  //io setup
-  setup_io();
   //network setup
-  setup_wifi();
+  setupWiFi();
   //mqtt setup
-  setup_server();
+  setupMQTT();
 }
 
 // ***************** SETUP *********************
