@@ -1,0 +1,8 @@
+-The WiFi embedded Arduino Mega contains both 
+the ESP8266 module and Arduino Mega module. 
+-The can operate independently. Therefore, two 
+sketches are ideal for this prop. 
+-Communication between the two is done through 
+UART interface. 
+-Serial1 is used for the UART Communication
+not Serial(USB).
