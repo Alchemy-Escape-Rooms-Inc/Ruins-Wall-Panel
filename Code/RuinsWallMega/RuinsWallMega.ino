@@ -186,6 +186,8 @@ int storageIndex = 0;                  //Keeps track of the number of valid inpu
 
 unsigned long lastTime = 0;
 
+String incoming = "";
+bool puzzleSolved = false;
 
 sQueue posQueue;
 
@@ -213,6 +215,8 @@ void storeInput(int pos);
 
 void winningResponse();
 void losingResponse();
+void handleESPCommand();
+
 
 void resetInputStorage();
 void resetFadeStorage();
@@ -228,7 +232,8 @@ int inputToXY(int inputPosition);
 
 //------------------MAIN SETUP-------------------
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600);     //baud rate of USB serial communication
+  Serial1.begin(115200);  //baud rate between Mega and ESP8266
   _init();
 }
 //------------------MAIN LOOP--------------------
@@ -287,6 +292,18 @@ void run() {
     winningResponse();
     resetAll();
   }
+
+  while(Serial1.available()){
+    char c = Serial1.read();
+    if(c == '\n') {
+      incoming.trim();
+      handleCommand(incoming);
+      incoming = "";
+    } else {
+      incoming += c;
+    }
+  }
+
   delay(150);
 }
 
@@ -391,6 +408,8 @@ void winningResponse() {
   setRGB(0, 255, 0);
   for (int i = 0; i < 5; i++)
     blinkAllLEDs();
+  puzzleSolved = true;
+  sendCommand("SOLVED");  
 }
 
 void losingResponse() {
@@ -398,6 +417,20 @@ void losingResponse() {
   setRGB(255, 0, 0);
   for (int i = 0; i < 5; i++)
     blinkAllLEDs();
+}
+
+void sendCommand(String cmd){
+  Serial1.println(cmd);
+}
+void handleCommand(String cmd){
+  if(cmd == "PING"){
+    sendCommand("PONG");
+  } else if (cmd == "STATUS") {
+    sendCommand(puzzleSolved ? "SOLVED" : "READY");
+  } else if (cmd == "PUZZLE_RESET") {
+    resetAll();
+    sendCommand("RESET");
+  }
 }
 
 void resetInputStorage() {
@@ -413,6 +446,8 @@ void resetParameters() {
   void resetInputStorage();
   //void resetFadeStorage();
   storageIndex = 0;
+  puzzleSolved = false;
+  sendCommand("RESET");
   //fadeIndex = 0;
 }
 
