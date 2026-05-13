@@ -177,6 +177,10 @@ const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                            
 const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
 const int fadeFactor = 30;
 
+
+const int sFilter = 3;
+const int eFilter = 2;
+
 //Mutables variables
 int rgb[3] = { 255, 255, 255 };        //Default RGB value for all LEDs. White.
 int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
@@ -320,7 +324,7 @@ void turnOnLEDs(int ledPosition) {
 void updateLEDs(int position, void (*func)(int)) {
   Serial.print("Updating LEDs: ");
   for (int y = 0; y < yWeight; y++)
-    for (int x = 3; x < xWeight-2; x++)               //added filter: start on 3, end on 11
+    for (int x = sFilter; x < xWeight-eFilter; x++)               //added filter: start on 3, end on 11
       func((position + (y * LEDS_PER_ROW)) + x);
   FastLED.show();
   Serial.println("");
@@ -352,7 +356,7 @@ void fadeLEDs() {
     int position = inputToLEDMapping(temp->position);
     updateLEDs(position, fadeOutLEDs);
 
-    if (leds[position] == CRGB::Black) {
+    if (leds[position+sFilter] == CRGB::Black) {
       Serial.println("Attempting to pop the head of queue.");
       posQueue.pop();  //pop the head, FIFO, therefore assuming head would be faded out
       //posQueue.pop(position);
