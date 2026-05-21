@@ -63,9 +63,6 @@ struct sQueue {
     if (isAlreadyQueued(position))
       pop(position);
     iPosition * p = createIPosition(position);
-    Serial.print((p->position == position) ? "Successfully " : "Unsuccessfully ");
-    Serial.print("created the iPosition for position: ");
-    Serial.println(position);
     if (size < 1) {
       head = p;
       tail = p;
@@ -75,9 +72,6 @@ struct sQueue {
       tail->next = p;
       tail = p;
     }
-    Serial.print("Pushed position ");
-    Serial.print(position);
-    Serial.println(" into the queue.");
     size++;
   }
 
@@ -96,7 +90,6 @@ struct sQueue {
       delete temp;
     }
     size--;
-    Serial.println("Popped head from queue.");
   }
 
   void pop(int position) {
@@ -121,47 +114,21 @@ struct sQueue {
       delete temp;  //may not be necessary wasn't dynamically allocated
     }
     size--;
-    Serial.print("Popped position ");
-    Serial.print(position);
-    Serial.println(" from queue.");
   }
 
   iPosition* createIPosition(int position) {
-    Serial.print("Creating iPosition for position: ");
-    Serial.println(position);
     return new iPosition(position);
   }
 
   bool isAlreadyQueued(int position) {
     iPosition* temp = head;
     for (int i = 0; i < size; i++) {
-      Serial.print("Temp position: ");
-      Serial.println(temp->position);
       if (temp->position == position) {
-        Serial.print("Position ");
-        Serial.print(position);
-        Serial.println(" is already queued.");
         return true;
       }
       temp = temp->next;
     }
-    Serial.print("Position ");
-    Serial.print(position);
-    Serial.println(" is not already queued.");
     return false;
-  }
-
-  void printQueue() {
-    if (size < 1)
-      return;
-    iPosition* temp = head;
-    Serial.print("Queues content: ");
-    for (int i = 0; i < size; i++) {
-      Serial.print(temp->position);
-      Serial.print(" ");
-      temp = temp->next;
-    }
-    Serial.println(" ");
   }
 };
 
@@ -175,16 +142,21 @@ const int yWeight = 2;                                                          
 const int rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
 const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                                       //pins capturing/producing the row's level
 const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
-const int fadeFactor = 30;
+const int fadeFactor = 8;                 //smaller step = smoother fade (was 30, looked choppy)
+const unsigned long SCAN_INTERVAL = 120;  //ms between button scans (replaces blocking delay(150))
+const unsigned long FADE_INTERVAL = 16;   //ms between fade steps (~60 FPS) for a smooth glide
+const unsigned long WIN_EFFECT_MS = 8000; //duration of the win-state sparkle before settling
 
 //Mutables variables
-int rgb[3] = { 255, 255, 255 };        //Default RGB value for all LEDs. White.
+int rgb[3] = { 191, 0, 255 };          //Default RGB value for all LEDs. Bright neon purple.
 int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
 int inputStorage[NUM_SECRET_LETTERS];  //Array holding the valid inputs order of input
 int fadeIndex = 0;                     //Keeps track of the number of inputs for the fade effect
 int storageIndex = 0;                  //Keeps track of the number of valid inputs for the matching sequence
 
 unsigned long lastTime = 0;
+unsigned long lastScanTime = 0;  //timestamp of last button scan
+unsigned long lastFadeTime = 0;  //timestamp of last fade step
 
 String incoming = "";
 bool puzzleSolved = false;
@@ -214,6 +186,7 @@ void blinkAllLeds();
 void storeInput(int pos);
 
 void winningResponse();
+void winSparkle(unsigned long durationMs);
 void losingResponse();
 void handleCommand(String cmd);
 
@@ -275,7 +248,7 @@ void led_init() {
   FastLED.addLeds<LED_TYPE, LEDS_DATA_PIN, GRB>(leds, TOTAL_LEDS);
   FastLED.setBrightness(128);
   turnOffAllLEDs();
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);  //Bright neon purple ambient color
 }
 void run() {
   
@@ -289,22 +262,30 @@ void run() {
       incoming += c;
     }
   }
-  fadeLEDs();
-  
-  posQueue.printQueue();
-  int pressedButtonPosition = scanForButtonPress();
-  if (pressedButtonPosition < 0)
-    return;
-  turnOnLEDs(inputToLEDMapping(pressedButtonPosition));
-  storeInput(pressedButtonPosition);
+  unsigned long now = millis();
 
-  if (haveWon()) {
-    winningResponse();
-    resetAll();
+  //Advance the fade on its own fast cadence so it glides smoothly
+  //instead of jumping one big step per blocking loop.
+  if (now - lastFadeTime >= FADE_INTERVAL) {
+    lastFadeTime = now;
+    fadeLEDs();
   }
 
+  //Scan for button presses on a slower cadence (debounce) without
+  //blocking the fade. Replaces the old delay(150).
+  if (now - lastScanTime >= SCAN_INTERVAL) {
+    lastScanTime = now;
+    int pressedButtonPosition = scanForButtonPress();
+    if (pressedButtonPosition >= 0) {
+      turnOnLEDs(inputToLEDMapping(pressedButtonPosition));
+      storeInput(pressedButtonPosition);
 
-  delay(150);
+      if (haveWon()) {
+        winningResponse();
+        resetAll();
+      }
+    }
+  }
 }
 
 void setRGB(int red, int green, int blue) {
@@ -318,21 +299,18 @@ void turnOnLEDs(int ledPosition) {
 }
 
 void updateLEDs(int position, void (*func)(int)) {
-  Serial.print("Updating LEDs: ");
   for (int y = 0; y < yWeight; y++)
-    for (int x = 3; x < xWeight-2; x++)               //added filter: start on 3, end on 11
-      func((position + (y * LEDS_PER_ROW)) + x);
+    for (int x = 3; x < xWeight-2; x++) {             //added filter: start on 3, end on 11
+      int idx = (position + (y * LEDS_PER_ROW)) + x;
+      if (idx >= 0 && idx < TOTAL_LEDS)               //guard: never index leds[] out of bounds
+        func(idx);
+    }
   FastLED.show();
-  Serial.println("");
 }
 void setColorToLEDs(int ledPosition) {
-  Serial.print(" s");
-  Serial.print(ledPosition);
   leds[ledPosition] = CRGB(rgb[0], rgb[1], rgb[2]);
 }
 void fadeOutLEDs(int ledPosition) {
-  Serial.print(" f");
-  Serial.print(ledPosition);
   leds[ledPosition].fadeToBlackBy(fadeFactor);
 }
 
@@ -347,19 +325,24 @@ void fadeLEDs() {
   //No positions are in the queue, therefore leave
   if (posQueue.size < 1)
     return;
+
+  //Walk the queue. We must capture each node's successor BEFORE any
+  //pop(), because pop() may delete the node temp points at (it pops
+  //the head, FIFO) and dereferencing a freed node is undefined
+  //behaviour. The loop count is also snapshotted up front so it is
+  //not affected by pop() shrinking posQueue.size mid-walk.
   iPosition* temp = posQueue.head;
-  for (int i = 0; i < posQueue.size; i++) {
+  int count = posQueue.size;
+  for (int i = 0; i < count && temp != nullptr; i++) {
+    iPosition* nextNode = temp->next;  //capture before a possible pop()
+
     int position = inputToLEDMapping(temp->position);
     updateLEDs(position, fadeOutLEDs);
 
     if (leds[position] == CRGB::Black) {
-      Serial.println("Attempting to pop the head of queue.");
       posQueue.pop();  //pop the head, FIFO, therefore assuming head would be faded out
-      //posQueue.pop(position);
-      Serial.println("Successfully popped the head of the queue.");
     }
-    temp = temp->next;
-    Serial.println((int)leds[position].getAverageLight());
+    temp = nextNode;
   }
 }
 
@@ -405,11 +388,41 @@ void storeInput(int pos) {
 
 void winningResponse() {
   Serial.println("You won.");
-  setRGB(0, 255, 0);
-  for (int i = 0; i < 5; i++)
-    blinkAllLEDs();
+  setRGB(255, 200, 30);  //Shimmering gold for the correct answer
+
+  //8-second gold shimmer/sparkle reveal, then settle on solid gold.
+  winSparkle(WIN_EFFECT_MS);
+  turnOnAllLEDs();
+
   puzzleSolved = true;
-  sendCommand("SOLVED");  
+  sendCommand("SOLVED");
+}
+
+//Animated gold shimmer: a slowly pulsing gold base with random
+//bright sparkles flickering across the panel. Runs for durationMs.
+void winSparkle(unsigned long durationMs) {
+  const CRGB goldBase   = CRGB(255, 200, 30);   //shimmering gold
+  const CRGB sparkleHot = CRGB(255, 245, 200);  //hot near-white gold for the sparkle pop
+  unsigned long start = millis();
+
+  while (millis() - start < durationMs) {
+    //Gentle brightness pulse so the whole panel "breathes".
+    uint8_t pulse = 150 + (sin8(millis() / 6) >> 2);  //~150-213 range
+    FastLED.setBrightness(pulse);
+
+    //Lay down the gold base every frame.
+    fill_solid(leds, TOTAL_LEDS, goldBase);
+
+    //Scatter a handful of bright sparkles each frame.
+    for (int i = 0; i < 25; i++) {
+      leds[random16(TOTAL_LEDS)] = sparkleHot;
+    }
+
+    FastLED.show();
+    delay(20);  //~50 FPS shimmer
+  }
+
+  FastLED.setBrightness(brightness);  //restore normal brightness
 }
 
 void losingResponse() {
@@ -461,7 +474,7 @@ void resetOutputPins() {
   }
 }
 void resetAll() {
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);  //Bright neon purple ambient color
   resetOutputPins();
   resetParameters();
 }
@@ -481,8 +494,13 @@ int scanForButtonPress() {
     for (int x = 0; x < NUM_ROWS; x++) {
       bool pressed = (digitalRead(rowPins[x])) ? true : false;
       if (pressed) {
-        Serial.print("Button pressed: ");
-        Serial.println(y + (x * NUM_COLS));
+        //IMPORTANT: drive this column LOW before returning. The old
+        //code returned with colPins[y] still HIGH; with the slow
+        //delay(150) loop that cleared itself before it mattered, but
+        //the faster decoupled loop leaves the column stuck HIGH so
+        //the next scan sees TWO columns energised and reads a shifted
+        //row/col -> press maps to the wrong LED block.
+        digitalWrite(colPins[y], LOW);
         return y + (x * NUM_COLS);
       }
     }
@@ -502,11 +520,7 @@ int inputToLEDMapping(int inputPosition) {
       break;
     }
   }
-  y = inputPosition - (x * NUM_COLS); 
-  Serial.print("Row: ");
-  Serial.print(x);
-  Serial.print(" Col: ");
-  Serial.println(y);
-  return (y + (x * yWeight * NUM_COLS)) * xWeight;  
+  y = inputPosition - (x * NUM_COLS);
+  return (y + (x * yWeight * NUM_COLS)) * xWeight;
 
 }
