@@ -16,8 +16,8 @@ PubSubClient mqttClient(espClient);
 
 
 // WiFi credentials
-const char* WIFI_SSID = "AlchemyGuest";
-const char* WIFI_PASS = "VoodooVacation5601";
+const char* WIFI_SSID = "QuantumLoop";
+const char* WIFI_PASS = "Alchemy5601";
 
 // MQTT broker
 const char* MQTT_SERVER = "10.1.10.115";
