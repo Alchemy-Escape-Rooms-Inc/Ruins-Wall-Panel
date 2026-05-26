@@ -182,7 +182,7 @@ const int sFilter = 3;
 const int eFilter = 2;
 
 //Mutables variables
-int rgb[3] = { 255, 255, 255 };        //Default RGB value for all LEDs. White.
+int rgb[3] = { 180, 0, 255 };          //Default RGB value for all LEDs. Neon purple.
 int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
 int inputStorage[NUM_SECRET_LETTERS];  //Array holding the valid inputs order of input
 int fadeIndex = 0;                     //Keeps track of the number of inputs for the fade effect
@@ -218,6 +218,7 @@ void blinkAllLeds();
 void storeInput(int pos);
 
 void winningResponse();
+void goldSparkleCelebration();
 void losingResponse();
 void handleCommand(String cmd);
 
@@ -279,7 +280,7 @@ void led_init() {
   FastLED.addLeds<LED_TYPE, LEDS_DATA_PIN, GRB>(leds, TOTAL_LEDS);
   FastLED.setBrightness(128);
   turnOffAllLEDs();
-  setRGB(255, 255, 255);
+  setRGB(180, 0, 255);
 }
 void run() {
   
@@ -409,11 +410,43 @@ void storeInput(int pos) {
 
 void winningResponse() {
   Serial.println("You won.");
-  setRGB(0, 255, 0);
-  for (int i = 0; i < 5; i++)
-    blinkAllLEDs();
+  goldSparkleCelebration();
   puzzleSolved = true;
-  sendCommand("SOLVED");  
+  sendCommand("SOLVED");
+}
+
+void goldSparkleCelebration() {
+  const CRGB baseGold     = CRGB(255, 140, 0);    // warm gold floor
+  const CRGB sparkleColor = CRGB(255, 240, 180);  // hot white-gold pop
+  const uint8_t blendToGold     = 60;             // per-frame pull back toward gold
+  const uint8_t sparklesPerFrame = 22;            // density of new sparkles each frame
+  const int     frameDelayMs     = 35;            // ~28 fps
+  const int     totalFrames      = 150;           // ~5.25 s of celebration
+
+  fill_solid(leds, TOTAL_LEDS, baseGold);
+  FastLED.show();
+
+  for (int frame = 0; frame < totalFrames; frame++) {
+    // Decay: every LED drifts back toward base gold so old sparkles fade out smoothly
+    for (int i = 0; i < TOTAL_LEDS; i++) {
+      leds[i] = blend(leds[i], baseGold, blendToGold);
+    }
+    // Drop fresh sparkles at random positions
+    for (int s = 0; s < sparklesPerFrame; s++) {
+      leds[random16(TOTAL_LEDS)] = sparkleColor;
+    }
+    FastLED.show();
+    delay(frameDelayMs);
+  }
+
+  // Settle on a smooth fade to dark so the puzzle is visually "complete"
+  for (int fade = 0; fade < 30; fade++) {
+    fadeToBlackBy(leds, TOTAL_LEDS, 25);
+    FastLED.show();
+    delay(30);
+  }
+  FastLED.clear();
+  FastLED.show();
 }
 
 void losingResponse() {
@@ -465,7 +498,7 @@ void resetOutputPins() {
   }
 }
 void resetAll() {
-  setRGB(255, 255, 255);
+  setRGB(180, 0, 255);
   resetOutputPins();
   resetParameters();
 }
