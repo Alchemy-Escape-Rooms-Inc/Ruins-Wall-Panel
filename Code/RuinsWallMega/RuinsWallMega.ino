@@ -175,7 +175,8 @@ const int yWeight = 2;                                                          
 const int rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
 const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                                       //pins capturing/producing the row's level
 const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
-const int fadeFactor = 30;
+const int fadeFactor = 12;                                                                 //per-step fade amount; smaller = smoother
+const unsigned long fadeIntervalMs = 20;                                                   //fixed fade cadence (ms) for smoothness
 
 //Mutables variables
 int rgb[3] = { 191, 0, 255 };          //Default RGB value for all LEDs. Neon purple.
@@ -291,8 +292,7 @@ void run() {
     }
   }
   fadeLEDs();
-  
-  posQueue.printQueue();
+
   int pressedButtonPosition = scanForButtonPress();
   if (pressedButtonPosition < 0)
     return;
@@ -319,21 +319,15 @@ void turnOnLEDs(int ledPosition) {
 }
 
 void updateLEDs(int position, void (*func)(int)) {
-  Serial.print("Updating LEDs: ");
   for (int y = 0; y < yWeight; y++)
     for (int x = 3; x < xWeight-2; x++)               //added filter: start on 3, end on 11
       func((position + (y * LEDS_PER_ROW)) + x);
   FastLED.show();
-  Serial.println("");
 }
 void setColorToLEDs(int ledPosition) {
-  Serial.print(" s");
-  Serial.print(ledPosition);
   leds[ledPosition] = CRGB(rgb[0], rgb[1], rgb[2]);
 }
 void fadeOutLEDs(int ledPosition) {
-  Serial.print(" f");
-  Serial.print(ledPosition);
   leds[ledPosition].fadeToBlackBy(fadeFactor);
 }
 
@@ -348,19 +342,22 @@ void fadeLEDs() {
   //No positions are in the queue, therefore leave
   if (posQueue.size < 1)
     return;
+
+  //Fade on a fixed cadence so the effect is smooth regardless of loop speed
+  if (millis() - lastTime < fadeIntervalMs)
+    return;
+  lastTime = millis();
+
   iPosition* temp = posQueue.head;
   for (int i = 0; i < posQueue.size; i++) {
+    iPosition* nextNode = temp->next;  //capture before a possible pop frees temp
     int position = inputToLEDMapping(temp->position);
     updateLEDs(position, fadeOutLEDs);
 
     if (leds[position] == CRGB::Black) {
-      Serial.println("Attempting to pop the head of queue.");
       posQueue.pop();  //pop the head, FIFO, therefore assuming head would be faded out
-      //posQueue.pop(position);
-      Serial.println("Successfully popped the head of the queue.");
     }
-    temp = temp->next;
-    Serial.println((int)leds[position].getAverageLight());
+    temp = nextNode;
   }
 }
 
@@ -516,11 +513,7 @@ int inputToLEDMapping(int inputPosition) {
       break;
     }
   }
-  y = inputPosition - (x * NUM_COLS); 
-  Serial.print("Row: ");
-  Serial.print(x);
-  Serial.print(" Col: ");
-  Serial.println(y);
-  return (y + (x * yWeight * NUM_COLS)) * xWeight;  
+  y = inputPosition - (x * NUM_COLS);
+  return (y + (x * yWeight * NUM_COLS)) * xWeight;
 
 }
