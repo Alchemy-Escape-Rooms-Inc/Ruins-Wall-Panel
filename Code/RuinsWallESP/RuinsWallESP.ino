@@ -165,6 +165,11 @@ void receiveMegaCommand(String cmd){
   } else if(cmd == "MANUALLY_SOLVED"){
     puzzleSolved = true;
     mqttClient.publish(MQTT_TOPIC_COMMAND, "MANUALLY_SOLVED");
+  } else if(cmd.startsWith("CORRECT:")){
+    //a correct button in the sequence was pressed on the Mega
+    String statusMsg = "CORRECT_BUTTON:" + cmd.substring(8);
+    mqttClient.publish(MQTT_TOPIC_STATUS, statusMsg.c_str());
+    Serial.printf("[MQTT] %s -> published to status\n", cmd.c_str());
   }
 }
 

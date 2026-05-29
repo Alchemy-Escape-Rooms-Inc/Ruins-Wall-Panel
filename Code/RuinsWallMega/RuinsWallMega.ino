@@ -397,6 +397,8 @@ void storeInput(int pos) {
   if (pos == correctSecretLettersSequence[storageIndex]) {
     inputStorage[storageIndex] = pos;
     storageIndex++;
+    //notify the ESP so it can publish the correct press to MQTT
+    sendCommand("CORRECT:" + String(pos));
   } else {
     storageIndex = 0;
     resetInputStorage();
