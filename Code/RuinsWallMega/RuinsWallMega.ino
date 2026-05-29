@@ -178,7 +178,7 @@ const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                          
 const int fadeFactor = 30;
 
 //Mutables variables
-int rgb[3] = { 255, 255, 255 };        //Default RGB value for all LEDs. White.
+int rgb[3] = { 191, 0, 255 };          //Default RGB value for all LEDs. Neon purple.
 int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
 int inputStorage[NUM_SECRET_LETTERS];  //Array holding the valid inputs order of input
 int fadeIndex = 0;                     //Keeps track of the number of inputs for the fade effect
@@ -275,7 +275,7 @@ void led_init() {
   FastLED.addLeds<LED_TYPE, LEDS_DATA_PIN, GRB>(leds, TOTAL_LEDS);
   FastLED.setBrightness(128);
   turnOffAllLEDs();
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);
 }
 void run() {
   
@@ -463,7 +463,7 @@ void resetOutputPins() {
   }
 }
 void resetAll() {
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);
   resetOutputPins();
   resetParameters();
 }
