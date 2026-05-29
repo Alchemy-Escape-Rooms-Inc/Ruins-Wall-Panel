@@ -213,6 +213,7 @@ void blinkAllLeds();
 
 void storeInput(int pos);
 
+void shimmerGold();
 void winningResponse();
 void losingResponse();
 void handleCommand(String cmd);
@@ -405,13 +406,24 @@ void storeInput(int pos) {
   }
 }
 
+void shimmerGold() {
+  //Shimmering gold effect: gold base with randomized per-LED brightness
+  const CRGB gold = CRGB(255, 180, 0);
+  for (int frame = 0; frame < 120; frame++) {
+    for (int i = 0; i < TOTAL_LEDS; i++) {
+      leds[i] = gold;
+      leds[i].nscale8(random8(120, 256));  //flicker each LED's brightness
+    }
+    FastLED.show();
+    delay(35);
+  }
+}
+
 void winningResponse() {
   Serial.println("You won.");
-  setRGB(0, 255, 0);
-  for (int i = 0; i < 5; i++)
-    blinkAllLEDs();
+  shimmerGold();
   puzzleSolved = true;
-  sendCommand("SOLVED");  
+  sendCommand("SOLVED");
 }
 
 void losingResponse() {
