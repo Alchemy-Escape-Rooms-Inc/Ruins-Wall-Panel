@@ -10,14 +10,15 @@
 #define MQTT_TOPIC_COMMAND  "MermaidsTale/RuinsWall/command"
 #define MQTT_TOPIC_STATUS   "MermaidsTale/RuinsWall/status"
 #define MQTT_TOPIC_LOG      "MermaidsTale/RuinsWall/log"
+#define MQTT_TOPIC_PANEL    "MermaidsTale/RuinsWall/panel"
 //************ GLOBAL VARIABLES **********
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
 
 // WiFi credentials
-const char* WIFI_SSID = "AlchemyGuest";
-const char* WIFI_PASS = "VoodooVacation5601";
+const char* WIFI_SSID = "QuantumLoop";
+const char* WIFI_PASS = "Alchemy5601";
 
 // MQTT broker
 const char* MQTT_SERVER = "10.1.10.115";
@@ -165,6 +166,12 @@ void receiveMegaCommand(String cmd){
   } else if(cmd == "MANUALLY_SOLVED"){
     puzzleSolved = true;
     mqttClient.publish(MQTT_TOPIC_COMMAND, "MANUALLY_SOLVED");
+  } else if(cmd.startsWith("BTN:")){
+    //a correct button in the sequence was pressed on the Mega
+    String symbol = cmd.substring(4);
+    mqttClient.publish(MQTT_TOPIC_PANEL, symbol.c_str());
+    Serial.print("[MQTT] BUTTON -> ");
+    Serial.println(symbol);
   }
 }
 
