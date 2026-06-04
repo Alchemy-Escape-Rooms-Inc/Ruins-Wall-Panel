@@ -170,15 +170,17 @@ struct sQueue {
 //Immutables variables
 const int brightness = 128;                                                                //half the full brightness
 const int correctSecretLettersSequence[NUM_SECRET_LETTERS] = { 8, 22, 10, 26, 4, 13, 31};  //boolean array for tracking the proper selection sequence
+const char* const correctSecretLettersSymbols[NUM_SECRET_LETTERS] = { "Tail", "Turtle", "Monkey", "Seahorse", "Star", "Ship", "Trident" };
 const int xWeight = LEDS_PER_COL;                                                         //number of LEDs in a group to illuminate in a row (x)
 const int yWeight = 2;                                                                     //number of LEDs in a group to illuminate in column(s) (y)
 const int rWeight = LEDS_PER_ROW;                                                          //number of LEDs in each row
 const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                                       //pins capturing/producing the row's level
 const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
-const int fadeFactor = 30;
+const int fadeFactor = 12;                                                                 //per-step fade amount; smaller = smoother
+const unsigned long fadeIntervalMs = 20;                                                   //fixed fade cadence (ms) for smoothness
 
 //Mutables variables
-int rgb[3] = { 255, 255, 255 };        //Default RGB value for all LEDs. White.
+int rgb[3] = { 191, 0, 255 };          //Default RGB value for all LEDs. Neon purple.
 int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
 int inputStorage[NUM_SECRET_LETTERS];  //Array holding the valid inputs order of input
 int fadeIndex = 0;                     //Keeps track of the number of inputs for the fade effect
@@ -213,6 +215,7 @@ void blinkAllLeds();
 
 void storeInput(int pos);
 
+void shimmerGold();
 void winningResponse();
 void losingResponse();
 void handleCommand(String cmd);
@@ -275,7 +278,7 @@ void led_init() {
   FastLED.addLeds<LED_TYPE, LEDS_DATA_PIN, GRB>(leds, TOTAL_LEDS);
   FastLED.setBrightness(128);
   turnOffAllLEDs();
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);
 }
 void run() {
   
@@ -290,8 +293,7 @@ void run() {
     }
   }
   fadeLEDs();
-  
-  posQueue.printQueue();
+
   int pressedButtonPosition = scanForButtonPress();
   if (pressedButtonPosition < 0)
     return;
@@ -318,21 +320,15 @@ void turnOnLEDs(int ledPosition) {
 }
 
 void updateLEDs(int position, void (*func)(int)) {
-  Serial.print("Updating LEDs: ");
   for (int y = 0; y < yWeight; y++)
     for (int x = 3; x < xWeight-2; x++)               //added filter: start on 3, end on 11
       func((position + (y * LEDS_PER_ROW)) + x);
   FastLED.show();
-  Serial.println("");
 }
 void setColorToLEDs(int ledPosition) {
-  Serial.print(" s");
-  Serial.print(ledPosition);
   leds[ledPosition] = CRGB(rgb[0], rgb[1], rgb[2]);
 }
 void fadeOutLEDs(int ledPosition) {
-  Serial.print(" f");
-  Serial.print(ledPosition);
   leds[ledPosition].fadeToBlackBy(fadeFactor);
 }
 
@@ -347,19 +343,22 @@ void fadeLEDs() {
   //No positions are in the queue, therefore leave
   if (posQueue.size < 1)
     return;
+
+  //Fade on a fixed cadence so the effect is smooth regardless of loop speed
+  if (millis() - lastTime < fadeIntervalMs)
+    return;
+  lastTime = millis();
+
   iPosition* temp = posQueue.head;
   for (int i = 0; i < posQueue.size; i++) {
+    iPosition* nextNode = temp->next;  //capture before a possible pop frees temp
     int position = inputToLEDMapping(temp->position);
     updateLEDs(position, fadeOutLEDs);
 
     if (leds[position] == CRGB::Black) {
-      Serial.println("Attempting to pop the head of queue.");
       posQueue.pop();  //pop the head, FIFO, therefore assuming head would be faded out
-      //posQueue.pop(position);
-      Serial.println("Successfully popped the head of the queue.");
     }
-    temp = temp->next;
-    Serial.println((int)leds[position].getAverageLight());
+    temp = nextNode;
   }
 }
 
@@ -396,6 +395,8 @@ void storeInput(int pos) {
   //and update if necessary
   if (pos == correctSecretLettersSequence[storageIndex]) {
     inputStorage[storageIndex] = pos;
+    //notify the ESP so it can publish the symbol on the MQTT panel topic
+    sendCommand(String("BTN:") + correctSecretLettersSymbols[storageIndex]);
     storageIndex++;
   } else {
     storageIndex = 0;
@@ -403,13 +404,24 @@ void storeInput(int pos) {
   }
 }
 
+void shimmerGold() {
+  //Shimmering gold effect: gold base with randomized per-LED brightness
+  const CRGB gold = CRGB(255, 180, 0);
+  for (int frame = 0; frame < 120; frame++) {
+    for (int i = 0; i < TOTAL_LEDS; i++) {
+      leds[i] = gold;
+      leds[i].nscale8(random8(120, 256));  //flicker each LED's brightness
+    }
+    FastLED.show();
+    delay(35);
+  }
+}
+
 void winningResponse() {
   Serial.println("You won.");
-  setRGB(0, 255, 0);
-  for (int i = 0; i < 5; i++)
-    blinkAllLEDs();
+  shimmerGold();
   puzzleSolved = true;
-  sendCommand("SOLVED");  
+  sendCommand("SOLVED");
 }
 
 void losingResponse() {
@@ -461,7 +473,7 @@ void resetOutputPins() {
   }
 }
 void resetAll() {
-  setRGB(255, 255, 255);
+  setRGB(191, 0, 255);
   resetOutputPins();
   resetParameters();
 }
@@ -502,11 +514,7 @@ int inputToLEDMapping(int inputPosition) {
       break;
     }
   }
-  y = inputPosition - (x * NUM_COLS); 
-  Serial.print("Row: ");
-  Serial.print(x);
-  Serial.print(" Col: ");
-  Serial.println(y);
-  return (y + (x * yWeight * NUM_COLS)) * xWeight;  
+  y = inputPosition - (x * NUM_COLS);
+  return (y + (x * yWeight * NUM_COLS)) * xWeight;
 
 }
