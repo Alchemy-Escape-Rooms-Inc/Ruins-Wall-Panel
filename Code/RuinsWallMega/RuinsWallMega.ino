@@ -18,10 +18,11 @@
 
 struct iPosition {
   int position;
+  unsigned long pushedAt;
   iPosition *next, *prev;
   iPosition() = delete;
   iPosition(int pos)
-    : position(pos) {}
+    : position(pos), pushedAt(millis()), next(nullptr), prev(nullptr) {}
 };
 
 struct sQueue {
@@ -178,6 +179,7 @@ const int rowPins[NUM_ROWS] = { 9, 10, 11, 12, 13 };                            
 const int colPins[NUM_COLS] = { 2, 3, 4, 5, 6, 7, 8 };                                  //pins capturing/producing the columsn's level
 const int fadeFactor = 12;                                                                 //per-step fade amount; smaller = smoother
 const unsigned long fadeIntervalMs = 20;                                                   //fixed fade cadence (ms) for smoothness
+const unsigned long fadeDurationMs = 600;                                                  //total time a tapped position stays in the fade queue (must exceed 255/fadeFactor*fadeIntervalMs ≈ 425ms)
 
 //Mutables variables
 int rgb[3] = { 191, 0, 255 };          //Default RGB value for all LEDs. Neon purple.
@@ -185,6 +187,7 @@ int fadeStorage[INPUT_MATRIX];         //Array to hold all inputs
 int inputStorage[NUM_SECRET_LETTERS];  //Array holding the valid inputs order of input
 int fadeIndex = 0;                     //Keeps track of the number of inputs for the fade effect
 int storageIndex = 0;                  //Keeps track of the number of valid inputs for the matching sequence
+int lastPressedPosition = -1;          //Most recently accepted press; suppressed until a release-scan clears it
 
 unsigned long lastTime = 0;
 
@@ -207,7 +210,8 @@ void setRGB();
 void turnOnLEDs(int ledPosition);
 void updateLEDs(int ledPosition, void (*func)(int));
 void setColorToLEDs(int ledPosition);
-void fadeOutLEDs();
+void fadeOutLEDs(int ledPosition);
+void forceBlackLEDs(int ledPosition);
 void fadeLEDs();
 void turnOnAllLEDs();
 void turnOffAllLEDs();
@@ -331,34 +335,29 @@ void setColorToLEDs(int ledPosition) {
 void fadeOutLEDs(int ledPosition) {
   leds[ledPosition].fadeToBlackBy(fadeFactor);
 }
+void forceBlackLEDs(int ledPosition) {
+  leds[ledPosition] = CRGB::Black;
+}
 
 void fadeLEDs() {
-  /*
-  for(int i = 0; i < INPUT_MATRIX; i++){
-    if (fadeStorage[i] < 0)
-      return;
-    updateLEDs(inputToLEDMapping(fadeStorage[i]), fadeOutLEDs);
-  }
-  */
-  //No positions are in the queue, therefore leave
   if (posQueue.size < 1)
     return;
 
-  //Fade on a fixed cadence so the effect is smooth regardless of loop speed
   if (millis() - lastTime < fadeIntervalMs)
     return;
   lastTime = millis();
 
-  iPosition* temp = posQueue.head;
-  for (int i = 0; i < posQueue.size; i++) {
-    iPosition* nextNode = temp->next;  //capture before a possible pop frees temp
-    int position = inputToLEDMapping(temp->position);
-    updateLEDs(position, fadeOutLEDs);
+  //Drain expired heads, forcing their LEDs fully black so no afterimage lingers.
+  //FIFO insertion guarantees head is always oldest, so head-pop matches expiry order.
+  unsigned long now = millis();
+  while (posQueue.size > 0 && (now - posQueue.head->pushedAt) >= fadeDurationMs) {
+    updateLEDs(inputToLEDMapping(posQueue.head->position), forceBlackLEDs);
+    posQueue.pop();
+  }
 
-    if (leds[position] == CRGB::Black) {
-      posQueue.pop();  //pop the head, FIFO, therefore assuming head would be faded out
-    }
-    temp = nextNode;
+  //Fade everything still in flight. No popping during this pass → safe to walk with raw pointer.
+  for (iPosition* temp = posQueue.head; temp != nullptr; temp = temp->next) {
+    updateLEDs(inputToLEDMapping(temp->position), fadeOutLEDs);
   }
 }
 
@@ -483,26 +482,34 @@ bool haveWon() {
 }
 
 int scanForButtonPress() {
-  //Apply voltage to a column and
-  //check to each row for voltage.
-  //Do this for each column. Return
-  //position if voltage is detected,
-  //otherwise return a negative value.
+  //Scan the matrix without leaking drive lines across columns: always set
+  //colPins[y] LOW before moving on, even when we found a press in that column.
+  int detected = -1;
   for (int y = 0; y < NUM_COLS; y++) {
     digitalWrite(colPins[y], HIGH);
-    for (int x = 0; x < NUM_ROWS; x++) {
-      bool pressed = (digitalRead(rowPins[x])) ? true : false;
-      if (pressed) {
-        Serial.print("Button pressed: ");
-        Serial.println(y + (x * NUM_COLS));
-        return y + (x * NUM_COLS);
+    if (detected < 0) {
+      for (int x = 0; x < NUM_ROWS; x++) {
+        if (digitalRead(rowPins[x])) {
+          detected = y + (x * NUM_COLS);
+          break;
+        }
       }
     }
     digitalWrite(colPins[y], LOW);
   }
-  resetOutputPins();
-  //nothing is pressed
-  return -1;
+
+  //Require a release-scan between presses so a held finger doesn't replay forever.
+  if (detected < 0) {
+    lastPressedPosition = -1;
+    return -1;
+  }
+  if (detected == lastPressedPosition) {
+    return -1;
+  }
+  lastPressedPosition = detected;
+  Serial.print("Button pressed: ");
+  Serial.println(detected);
+  return detected;
 }
 
 int inputToLEDMapping(int inputPosition) {
